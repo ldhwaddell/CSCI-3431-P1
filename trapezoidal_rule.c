@@ -17,7 +17,22 @@ int GetNumRectangles()
 
     int num;
     printf("Enter the number of rectangles to approximate the function x^2+1 with: ");
-    //Ensure input is integer
+    // Ensure input is integer
+    if (scanf("%d", &num) == 1)
+    {
+        return num;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+int GetNumProcesses()
+{
+    int num;
+    printf("Enter the number of processes to approximate the function x^2+1 with: ");
+    // Ensure input is integer
     if (scanf("%d", &num) == 1)
     {
         return num;
@@ -30,21 +45,26 @@ int GetNumRectangles()
 
 int main(void)
 {
-    int numRectangles;
+    int numRectangles, numProcesses;
+    int fds0[2];
+    int pipes[8] = {fds0[2], fds0[2]};
 
     numRectangles = GetNumRectangles();
     if (numRectangles == -1)
     {
-        printf("[Error]: Must enter an integer\n");
+        printf("[Error]: Must enter an integer for number of rectangles to approximate with\n");
         exit(1);
     }
-    else
+    numProcesses = GetNumProcesses();
+
+    if (numProcesses == -1)
     {
-        // Call function to spawn child processes
-        //  Serves as entry to program
-        printf("success\n");
+        printf("[Error]: Must enter an integer less than 9 for processes to approximate the function with\n");
+        exit(1);
     }
 
+    // Call function to spawn child processes
+    //  Serves as entry to program
     printf("Approximating with number of rectangles = %d\n", numRectangles);
 
     float test;
@@ -53,3 +73,20 @@ int main(void)
 
     return 0;
 }
+
+// Child Example
+// pid_t pid=fork();
+
+// if(pid < 0)
+// {
+//     perror("couldn't fork");
+//     exit(1);
+// }
+
+// if(pid == 0) {
+//         // Child code
+//         do_stuff();
+//         exit(0);
+// }
+
+// Parent code
