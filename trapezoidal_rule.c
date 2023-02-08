@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #define MAX_PROCESSES 8
+#define MAX_RECTANGLES 64
 
 // Function x^2 +1 to approximate
 float f(float x)
@@ -18,7 +19,7 @@ int GetNumRectangles()
     int num;
     printf("Enter the number of rectangles to approximate the function x^2+1 with: ");
     // Ensure input is integer
-    if (scanf("%d", &num) == 1)
+    if ((scanf("%d", &num) == 1) && num <= MAX_RECTANGLES)
     {
         return num;
     }
@@ -33,9 +34,11 @@ int GetNumProcesses()
     int num;
     printf("Enter the number of processes to approximate the function x^2+1 with: ");
     // Ensure input is integer
-    if (scanf("%d", &num) == 1)
+    if ((scanf("%d", &num) == 1) && num <= MAX_PROCESSES)
     {
+
         return num;
+
     }
     else
     {
@@ -46,22 +49,24 @@ int GetNumProcesses()
 int main(void)
 {
     int numRectangles, numProcesses;
-    int fds0[2];
-    int pipes[8] = {fds0[2], fds0[2]};
 
     numRectangles = GetNumRectangles();
     if (numRectangles == -1)
     {
-        printf("[Error]: Must enter an integer for number of rectangles to approximate with\n");
+        printf("[Error]: Must enter an integer for number of rectangles to approximate with!\n");
         exit(1);
     }
     numProcesses = GetNumProcesses();
 
     if (numProcesses == -1)
     {
-        printf("[Error]: Must enter an integer less than 9 for processes to approximate the function with\n");
+        printf("[Error]: Must enter an integer less than or equal to 8 for processes to approximate the function with!\n");
         exit(1);
     }
+
+    // Create numProcesses amount of pipes for parent to child and child to parent communication
+    int fd_ctp[numProcesses][2];
+    int fd_ptc[numProcesses][2];
 
     // Call function to spawn child processes
     //  Serves as entry to program
