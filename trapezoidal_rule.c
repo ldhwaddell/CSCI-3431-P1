@@ -48,35 +48,82 @@ int GetNumProcesses()
     }
 }
 
-// Function to spawn in N processes as user inputs
-void spawnChildren(int N, int ctp[][2], int ptc[][2])
+void childCode(int ptc[][2], int ctp[][2], int processNumber, float intervalWidth, int maxIterations)
 {
-    pid_t pid;
+    // Read value from parent
+    float x_i, s_i = 0;
+    float x_i_plus_1;
 
-    for (int i = 1; i < N + 1; i++)
+    // Close write end of parent to child pipe
+    close(ptc[processNumber][WRITE]);
+    read(ptc[processNumber][READ], &x_i, sizeof(float));
+
+    // Iterate over the max possible amount of rectangles times
+    for (int i = 0; i < maxIterations; i++)
+    //while(1)
     {
+        // calculate x_i+1
+        x_i_plus_1 = x_i + intervalWidth;
+        printf("num: %d, xi %f, xi1 %f\n", processNumber, x_i, x_i_plus_1);
 
-        // Spawn new child process
-        pid = fork();
+        // calculate s_i
+        s_i = intervalWidth * (f(x_i) + f(x_i_plus_1)) / 2;
 
-        if (pid < 0)
-        {
-            printf("[Error]: Unsuccessful fork by child %d with pid: %d. Program terminating.\n", i, getpid());
-            exit(1);
-        }
-        else if (pid == 0)
-        {
+        // send back to parent
+        close(ctp[processNumber][READ]);
+        write(ctp[processNumber][WRITE], &s_i, sizeof(float));
+        printf("writing back si val: %f", s_i);
+        // Read in a new x_i value
+        read(ptc[processNumber][READ], &x_i, sizeof(float));
 
-            printf("Child number %d created with pid %d\n", i, getpid());
-            break;
-        }
-        else
+        
+    }
+}
+
+float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles, float intervalWidth, float startInterval)
+{
+    float s_i, x_i = 0;
+    float sum = 0;
+
+    // Assign the first N trapezoids to the N child processes
+    for (int i = 0; i < numProcesses; i++)
+    {
+        // Close read end of ptc
+        close(ptc[i][READ]);
+        // set x_i value
+        x_i = startInterval + (i * intervalWidth);
+
+        //  Write to child the x_i value
+        printf("writing to child %d value %f\n", i, x_i);
+        write(ptc[i][WRITE], &x_i, sizeof(float));
+    }
+
+    if (numProcesses == numRectangles)
+    {
+        for (int i = 0; i < numProcesses; i++)
         {
-            // Parent
-            close(ptc[i][READ]);
-            write(ptc[i][WRITE], &i, sizeof(int));
+            close(ctp[i][WRITE]);
+            read(ctp[i][READ], &s_i, sizeof(float));
+
+            sum += s_i;
         }
     }
+    else
+    {
+        // For the remaining trapezoids
+        for (int j = numProcesses; j < numRectangles; j++)
+        {
+            close(ctp[(j % numProcesses)][WRITE]);
+            read(ctp[(j % numProcesses)][READ], &s_i, sizeof(float));
+            // printf("s_i: %f\n", s_i);
+            //  update sum
+            sum += s_i;
+            x_i = startInterval + (j * intervalWidth);
+            write(ptc[(j % numProcesses)][WRITE], &x_i, sizeof(float));
+        }
+    }
+
+    return sum;
 }
 
 int main(void)
@@ -110,9 +157,15 @@ int main(void)
     int fd_ctp[numProcesses][2];
     int fd_ptc[numProcesses][2];
 
-    // Create variables for interval start, end, and width of rectangles
-    float startInterval = 0.0, endInterval = 2.0;
+    // Create an array of numProcesses length to hold the pid of each process
+    pid_t pids[numProcesses];
 
+    // Get current process ID so ID of parent is known
+    pid_t parent_pid = getpid();
+
+    // Create variables for interval start, end, and width of rectangles
+    float startInterval = 0.0;
+    float endInterval = 2.0;
     float intervalWidth = (endInterval - startInterval) / numRectangles;
 
     // Call function to spawn child processes
@@ -120,11 +173,73 @@ int main(void)
     printf("Approximating function 'x^2 + 1' with %d processes and %d rectangles.\n", numProcesses, numRectangles);
     printf("Rectangle width = %f.\n", intervalWidth);
     printf("-------------------------------------------------------------------------\n\n");
-    printf("Creating %d child processes: \n", numProcesses);
+    printf("Creating %d sets of pipes: \n", numProcesses);
+    // Create all the pipes
+    for (int i = 0; i < numProcesses; i++)
+    {
 
+        if (pipe(fd_ctp[i]) < 0)
+        {
+            printf("[Error]: Unsuccessful pipe creation for child-to-parent pipe %d. Program terminating.\n", i);
+            exit(1);
+        }
+        else
+        {
+            printf("Child-to-parent pipe %d successfully created\n", i);
+        }
+        if (pipe(fd_ptc[i]) < 0)
+        {
+            printf("[Error]: Unsuccessful pipe creation for parent-to-child pipe %d. Program terminating.\n", i);
+            exit(1);
+        }
+        else
+        {
+            printf("Parent-to-child pipe %d successfully created\n", i);
+        }
+    }
 
-    spawnChildren(numProcesses, fd_ctp, fd_ptc);
+    printf("\nParent Process ID = %d\n", pids[0]);
 
+    printf("\nCreating %d child processes: \n", numProcesses);
+
+    int maxIterations = (numRectangles + numProcesses - 1) / numProcesses;
+
+    // Create all the children
+
+    for (int i = 0; i < numProcesses; i++)
+    {
+
+        // Spawn new child process
+        pids[i] = fork();
+
+        if (pids[i] < 0)
+        {
+            printf("[Error]: Unsuccessful fork by child %d with error: %d. Program terminating.\n", i, pids[i]);
+            exit(1);
+        }
+        else if (pids[i] == 0)
+        {
+
+            // printf("Child number %d created. Calling child function\n", i);
+            childCode(fd_ptc, fd_ctp, i, intervalWidth, maxIterations);
+            break;
+        }
+    }
+
+    if (getpid() == parent_pid)
+    {
+        // printf("parent \n");
+        // int length = sizeof(pids) / sizeof(pids[0]);
+
+        // for (int i = 0; i < length; i++)
+        // {
+        //     printf("%d ", pids[i]);
+        // }
+        // printf("\n");
+
+        printf("Sum is: %f\n", parentCode(fd_ptc, fd_ctp, numProcesses, numRectangles, intervalWidth, startInterval));
+        exit(0);
+    }
 
     return 0;
 }
