@@ -68,6 +68,8 @@ void childCode(int ptc[][2], int ctp[][2], int processNumber, float intervalWidt
         // Send s_i back to parent
         write(ctp[processNumber][WRITE], &s_i, sizeof(float));
     }
+    // Child exits once iterating maxIterations number of times
+    exit(0);
 }
 
 float flushPipes(int ctp[][2], int numProcesses, float currentSum)
@@ -152,6 +154,7 @@ int main(void)
         exit(1);
     }
 
+    // Error checking on the interval vlaues
     if (startInterval == endInterval)
     {
         printf("[Error]: Interval start value must not be the same as interval end value!\n");
@@ -267,6 +270,7 @@ int main(void)
     {
         sum = parentCode(fd_ptc, fd_ctp, numProcesses, numRectangles, intervalWidth, startInterval);
         printf("\nSum with %d rectangles spread over %d processes is: %f\n", numRectangles, numProcesses, sum);
+        // Ensure all child processes finish before exiting
         exit(0);
     }
 
