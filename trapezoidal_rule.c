@@ -14,6 +14,7 @@ float f(float x)
     return (x * x) + 1;
 }
 
+// Function used to get the upper and lower bound to integrate over, while validating input
 float getInterval(char str[])
 {
     float num;
@@ -29,6 +30,7 @@ float getInterval(char str[])
     }
 }
 
+// Funciton to get the # of rectangles and # of processes the compute the integration with, while vlaidaitng input
 int getIntegrationParams(char str[], int maxBound)
 {
     int num;
@@ -44,6 +46,8 @@ int getIntegrationParams(char str[], int maxBound)
     }
 }
 
+// Function to be called by each child process. Function loops numerous times
+// reading in values from the parent, writing back the calculated area of trapezoid, and writing back the values.
 void childCode(int ptc[][2], int ctp[][2], int processNumber, float intervalWidth, int maxIterations)
 {
     // Read value from parent
@@ -72,6 +76,8 @@ void childCode(int ptc[][2], int ctp[][2], int processNumber, float intervalWidt
     exit(0);
 }
 
+// Function called by the parentCode function with goal of making a final iteraiton over the pipes from children to parent
+// and making sure they do not have any information remaining in them
 float flushPipes(int ctp[][2], int numProcesses, float currentSum)
 {
     float s_i;
@@ -89,6 +95,8 @@ float flushPipes(int ctp[][2], int numProcesses, float currentSum)
     return currentSum;
 }
 
+// Code to be exectude only by the parent process
+// Job is to assign various x_i values to children and read back their responses
 float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles, float intervalWidth, float startInterval)
 {
     float s_i, x_i = 0;
