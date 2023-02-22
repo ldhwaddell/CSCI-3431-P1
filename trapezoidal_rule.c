@@ -128,8 +128,9 @@ float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles
 
 int main(void)
 {
-    int numRectangles, numProcesses;
-    float startInterval, endInterval;
+    int numRectangles, numProcesses, maxIterations;
+    float startInterval, endInterval, intervalWidth, sum;
+    pid_t parent_pid;
     char start[] = "start";
     char end[] = "end";
     char rectangles[] = "rectangles";
@@ -192,14 +193,14 @@ int main(void)
     int fd_ctp[numProcesses][2];
     int fd_ptc[numProcesses][2];
 
-    // Create an array of numProcesses length to hold the pid of each process
-    pid_t pids[numProcesses];
-
     // Get current process ID so ID of parent is known
-    pid_t parent_pid = getpid();
+    parent_pid = getpid();
 
-    // Create variables for interval start, end, and width of rectangles
-    float intervalWidth = (endInterval - startInterval) / numRectangles;
+    // Assign value to variable for width of rectangles
+    intervalWidth = (endInterval - startInterval) / numRectangles;
+
+    // Max iterations represents the theoretical greatest number of times a child would need to calculate a rectangle
+    maxIterations = (numRectangles + numProcesses - 1) / numProcesses;
 
     // Call function to spawn child processes
     printf("\n-------------------------------------------------------------------------\n");
@@ -233,31 +234,29 @@ int main(void)
         }
     }
     printf("-------------------------------------------------------------------------\n\n");
-
     printf("-------------------------------------------------------------------------\n");
-    printf("Parent Process ID = %d\n", pids[0]);
+    printf("Parent Process ID = %d\n", parent_pid);
     printf("-------------------------------------------------------------------------\n\n");
-
     printf("-------------------------------------------------------------------------\n");
     printf("Creating %d child processes: \n", numProcesses);
 
-    int maxIterations = (numRectangles + numProcesses - 1) / numProcesses;
-
     // Create all the children
+    pid_t pid;
 
     for (int i = 0; i < numProcesses; i++)
     {
 
         // Spawn new child process
-        pids[i] = fork();
+        pid = fork();
 
-        if (pids[i] < 0)
+        if (pid < 0)
         {
-            printf("[Error]: Unsuccessful fork by child %d with error: %d. Program terminating.\n", i, pids[i]);
+            printf("[Error]: Unsuccessful fork by child %d with error: %d. Program terminating.\n", i, pid);
             exit(1);
         }
-        else if (pids[i] == 0)
+        else if (pid == 0)
         {
+            // Child executes child code then breaks to ensure child loop ends
             childCode(fd_ptc, fd_ctp, i, intervalWidth, maxIterations);
             break;
         }
@@ -266,7 +265,8 @@ int main(void)
     // Ensure only the parent (child spawning) process runs the parent code
     if (getpid() == parent_pid)
     {
-        printf("\nSum with %d rectangles spread over %d processes is: %f\n", numRectangles, numProcesses, parentCode(fd_ptc, fd_ctp, numProcesses, numRectangles, intervalWidth, startInterval));
+        sum = parentCode(fd_ptc, fd_ctp, numProcesses, numRectangles, intervalWidth, startInterval);
+        printf("\nSum with %d rectangles spread over %d processes is: %f\n", numRectangles, numProcesses, sum);
         exit(0);
     }
 
