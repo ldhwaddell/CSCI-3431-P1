@@ -14,14 +14,12 @@ float f(float x)
     return (x * x) + 1;
 }
 
-// Function to get the number of rectangles to approximate the function with
-int GetNumRectangles()
+float getInterval(char str[])
 {
-
-    int num;
-    printf("Enter the number of rectangles to approximate the function x^2+1 with: ");
+    float num;
+    printf("Enter the %s of the interval to integrate over: ", str);
     // Ensure input is integer
-    if ((scanf("%d", &num) == 1) && num > 0 && num <= MAX_RECTANGLES)
+    if ((scanf("%f", &num) == 1))
     {
         return num;
     }
@@ -31,15 +29,13 @@ int GetNumRectangles()
     }
 }
 
-// Function to get the number of processes to use in the approximation
-int GetNumProcesses()
+int getIntegrationParams(char str[], int maxBound)
 {
     int num;
-    printf("Enter the number of processes to approximate the function x^2+1 with: ");
+    printf("Enter the number of %s to approximate the function x^2+1 with: ", str);
     // Ensure input is integer
-    if ((scanf("%d", &num) == 1) && num > 0 && num <= MAX_PROCESSES)
+    if ((scanf("%d", &num) == 1) && num > 0 && num <= maxBound)
     {
-
         return num;
     }
     else
@@ -51,33 +47,44 @@ int GetNumProcesses()
 void childCode(int ptc[][2], int ctp[][2], int processNumber, float intervalWidth, int maxIterations)
 {
     // Read value from parent
-    float x_i, s_i = 0;
-    float x_i_plus_1;
-
-    // Close write end of parent to child pipe
-    close(ptc[processNumber][WRITE]);
-    read(ptc[processNumber][READ], &x_i, sizeof(float));
+    float x_i, x_i_plus_1, s_i = 0;
 
     // Iterate over the max possible amount of rectangles times
     for (int i = 0; i < maxIterations; i++)
-    //while(1)
     {
+        // Close write end of parent to child pipe
+        close(ptc[processNumber][WRITE]);
+        // Read in a new x_i value
+        read(ptc[processNumber][READ], &x_i, sizeof(float));
+
         // calculate x_i+1
         x_i_plus_1 = x_i + intervalWidth;
-        printf("num: %d, xi %f, xi1 %f\n", processNumber, x_i, x_i_plus_1);
 
         // calculate s_i
         s_i = intervalWidth * (f(x_i) + f(x_i_plus_1)) / 2;
 
-        // send back to parent
+        // Close read end of child to parent pipe
         close(ctp[processNumber][READ]);
+        // Send s_i back to parent
         write(ctp[processNumber][WRITE], &s_i, sizeof(float));
-        printf("writing back si val: %f", s_i);
-        // Read in a new x_i value
-        read(ptc[processNumber][READ], &x_i, sizeof(float));
-
-        
     }
+}
+
+float flushPipes(int ctp[][2], int numProcesses, float currentSum)
+{
+    float s_i;
+    printf("\n-------------------------------------------------------------------------");
+    printf("\nComputations complete. Flushing Pipes\n");
+    for (int i = 0; i < numProcesses; i++)
+    {
+        close(ctp[i][WRITE]);
+        read(ctp[i][READ], &s_i, sizeof(float));
+        printf("Reading back value %f from child %d\n", s_i, i);
+        currentSum += s_i;
+    }
+    printf("-------------------------------------------------------------------------\n");
+
+    return currentSum;
 }
 
 float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles, float intervalWidth, float startInterval)
@@ -98,30 +105,23 @@ float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles
         write(ptc[i][WRITE], &x_i, sizeof(float));
     }
 
-    if (numProcesses == numRectangles)
+    // For the remaining trapezoids
+    for (int j = numProcesses; j < numRectangles; j++)
     {
-        for (int i = 0; i < numProcesses; i++)
-        {
-            close(ctp[i][WRITE]);
-            read(ctp[i][READ], &s_i, sizeof(float));
+        close(ctp[(j % numProcesses)][WRITE]);
+        read(ctp[(j % numProcesses)][READ], &s_i, sizeof(float));
+        printf("Reading value %f from child %d\n", s_i, j % numProcesses);
+        //  update sum
+        sum += s_i;
+        x_i = startInterval + (j * intervalWidth);
+        printf("writing to child %d value %f\n", j % numProcesses, x_i);
+        close(ptc[(j % numProcesses)][READ]);
+        write(ptc[(j % numProcesses)][WRITE], &x_i, sizeof(float));
+    }
 
-            sum += s_i;
-        }
-    }
-    else
-    {
-        // For the remaining trapezoids
-        for (int j = numProcesses; j < numRectangles; j++)
-        {
-            close(ctp[(j % numProcesses)][WRITE]);
-            read(ctp[(j % numProcesses)][READ], &s_i, sizeof(float));
-            // printf("s_i: %f\n", s_i);
-            //  update sum
-            sum += s_i;
-            x_i = startInterval + (j * intervalWidth);
-            write(ptc[(j % numProcesses)][WRITE], &x_i, sizeof(float));
-        }
-    }
+    printf("-------------------------------------------------------------------------\n");
+
+    sum = flushPipes(ctp, numProcesses, sum);
 
     return sum;
 }
@@ -129,9 +129,44 @@ float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles
 int main(void)
 {
     int numRectangles, numProcesses;
+    float startInterval, endInterval;
+    char start[] = "start";
+    char end[] = "end";
+    char rectangles[] = "rectangles";
+    char processes[] = "processes";
+
+    // Get start of interval to sum over
+    startInterval = getInterval(start);
+    if (startInterval == -1)
+    {
+        printf("[Error]: Must enter a float or an integer for start of range to integrate over!\n");
+        exit(1);
+    }
+
+    // Get end of interval to sum over
+    endInterval = getInterval(end);
+    if (endInterval == -1)
+    {
+        printf("[Error]: Must enter a float or an integer for end of range to integrate over!\n");
+        exit(1);
+    }
+
+    if (startInterval == endInterval)
+    {
+        printf("[Error]: Interval start value must not be the same as interval end value!\n");
+        exit(1);
+    }
+    else if (startInterval > endInterval)
+    {
+        printf("\n[Warning]: Requested start interval is less than interval end. Swapping values to use %f as interval start and %f as interval end.\n\n", endInterval, startInterval);
+        float temp;
+        temp = startInterval;
+        startInterval = endInterval;
+        endInterval = temp;
+    }
 
     // Validate number of rectangles user enters
-    numRectangles = GetNumRectangles();
+    numRectangles = getIntegrationParams(rectangles, MAX_RECTANGLES);
     if (numRectangles == -1)
     {
         printf("[Error]: Must enter an integer in range [1,64] for number of rectangles to approximate with!\n");
@@ -139,7 +174,7 @@ int main(void)
     }
 
     // Validate number of processes user enters
-    numProcesses = GetNumProcesses();
+    numProcesses = getIntegrationParams(processes, MAX_PROCESSES);
     if (numProcesses == -1)
     {
         printf("[Error]: Must enter an integer in range [1, 8] for number processes to approximate the function with!\n");
@@ -149,7 +184,7 @@ int main(void)
     // if user wants more processes than rectangles, just set them equal to eachother to stop useless process creation
     if (numProcesses > numRectangles)
     {
-        printf("[Warning]: Requested number of processes greater than number of rectangles. Creating %d rectangles instead\n", numProcesses);
+        printf("\n[Warning]: Requested number of processes greater than number of rectangles. Using %d processes instead.\n", numRectangles);
         numProcesses = numRectangles;
     }
 
@@ -164,15 +199,15 @@ int main(void)
     pid_t parent_pid = getpid();
 
     // Create variables for interval start, end, and width of rectangles
-    float startInterval = 0.0;
-    float endInterval = 2.0;
     float intervalWidth = (endInterval - startInterval) / numRectangles;
 
     // Call function to spawn child processes
     printf("\n-------------------------------------------------------------------------\n");
     printf("Approximating function 'x^2 + 1' with %d processes and %d rectangles.\n", numProcesses, numRectangles);
+    printf("Interval range [%f, %f]\n", startInterval, endInterval);
     printf("Rectangle width = %f.\n", intervalWidth);
     printf("-------------------------------------------------------------------------\n\n");
+    printf("-------------------------------------------------------------------------\n");
     printf("Creating %d sets of pipes: \n", numProcesses);
     // Create all the pipes
     for (int i = 0; i < numProcesses; i++)
@@ -197,10 +232,14 @@ int main(void)
             printf("Parent-to-child pipe %d successfully created\n", i);
         }
     }
+    printf("-------------------------------------------------------------------------\n\n");
 
-    printf("\nParent Process ID = %d\n", pids[0]);
+    printf("-------------------------------------------------------------------------\n");
+    printf("Parent Process ID = %d\n", pids[0]);
+    printf("-------------------------------------------------------------------------\n\n");
 
-    printf("\nCreating %d child processes: \n", numProcesses);
+    printf("-------------------------------------------------------------------------\n");
+    printf("Creating %d child processes: \n", numProcesses);
 
     int maxIterations = (numRectangles + numProcesses - 1) / numProcesses;
 
@@ -219,25 +258,15 @@ int main(void)
         }
         else if (pids[i] == 0)
         {
-
-            // printf("Child number %d created. Calling child function\n", i);
             childCode(fd_ptc, fd_ctp, i, intervalWidth, maxIterations);
             break;
         }
     }
 
+    // Ensure only the parent (child spawning) process runs the parent code
     if (getpid() == parent_pid)
     {
-        // printf("parent \n");
-        // int length = sizeof(pids) / sizeof(pids[0]);
-
-        // for (int i = 0; i < length; i++)
-        // {
-        //     printf("%d ", pids[i]);
-        // }
-        // printf("\n");
-
-        printf("Sum is: %f\n", parentCode(fd_ptc, fd_ctp, numProcesses, numRectangles, intervalWidth, startInterval));
+        printf("\nSum with %d rectangles spread over %d processes is: %f\n", numRectangles, numProcesses, parentCode(fd_ptc, fd_ctp, numProcesses, numRectangles, intervalWidth, startInterval));
         exit(0);
     }
 
