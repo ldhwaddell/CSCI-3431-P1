@@ -111,7 +111,7 @@ float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles
         x_i = startInterval + (i * intervalWidth);
 
         //  Write to child the x_i value
-        printf("writing to child %d value %f\n", i, x_i);
+        printf("Writing value %f to child %d\n", x_i, i);
         write(ptc[i][WRITE], &x_i, sizeof(float));
     }
 
@@ -124,7 +124,8 @@ float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles
         //  update sum
         sum += s_i;
         x_i = startInterval + (j * intervalWidth);
-        printf("writing to child %d value %f\n", j % numProcesses, x_i);
+        printf("Writing value %f to child %d\n", x_i, j % numProcesses);
+
         close(ptc[(j % numProcesses)][READ]);
         write(ptc[(j % numProcesses)][WRITE], &x_i, sizeof(float));
     }
