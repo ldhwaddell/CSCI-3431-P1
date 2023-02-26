@@ -118,16 +118,16 @@ float parentCode(int ptc[][2], int ctp[][2], int numProcesses, int numRectangles
     // For the remaining trapezoids
     for (int j = numProcesses; j < numRectangles; j++)
     {
-        close(ctp[(j % numProcesses)][WRITE]);
-        read(ctp[(j % numProcesses)][READ], &s_i, sizeof(float));
+        close(ctp[j % numProcesses][WRITE]);
+        read(ctp[j % numProcesses][READ], &s_i, sizeof(float));
         printf("Reading value %f from child %d\n", s_i, j % numProcesses);
         //  update sum
         sum += s_i;
         x_i = startInterval + (j * intervalWidth);
         printf("Writing value %f to child %d\n", x_i, j % numProcesses);
 
-        close(ptc[(j % numProcesses)][READ]);
-        write(ptc[(j % numProcesses)][WRITE], &x_i, sizeof(float));
+        close(ptc[j % numProcesses][READ]);
+        write(ptc[j % numProcesses][WRITE], &x_i, sizeof(float));
     }
 
     printf("-------------------------------------------------------------------------\n");
