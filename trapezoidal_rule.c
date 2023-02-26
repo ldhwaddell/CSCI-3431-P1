@@ -30,7 +30,7 @@ float getInterval(char str[])
     }
 }
 
-// Funciton to get the # of rectangles and # of processes the compute the integration with, while vlaidaitng input
+// Function to get the # of rectangles and # of processes the compute the integration with, while validating input
 int getIntegrationParams(char str[], int maxBound)
 {
     int num;
